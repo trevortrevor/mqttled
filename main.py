@@ -5,24 +5,29 @@ import paho.mqtt.client as mqtt
 import re
 import netifaces as ni
 import encodings.idna
+import yaml
+with open("config.yaml", 'ro') as config:
+    try:
+        configuration = yaml.safe_load(config)
+    except yaml.YAMLError as exc:
+        print(exc)
+bind_if = configuration['interface']
+discovery_topic = configuration['dicovery_topic']
+base_topic = configuration['base_topic']
+model = configuration['model']    
+interface_ip = ni.ifaddresses(bind_if)[ni.AF_INET][0]['addr']
 
-interface_ip = ni.ifaddresses('br-lan')[ni.AF_INET][0]['addr']
-
-discovery_topic = "homeassistantTEST/"
 hostidentifier = os.uname()
-ha_discovery = "openwrtLED_" + hostidentifier.nodename + "/"
-base_topic = "openwrtLED"
+ha_discovery = base_topic + "_" + hostidentifier.nodename + "/"
 sub_topic = hostidentifier.nodename
 topic = base_topic + "/" + sub_topic + "/"
-
 
 device = {
         "identifiers": ["openWrtLED" + hostidentifier.nodename],
         "name": hostidentifier.nodename,
         "manufacturer": "OpenWRT",
-        "model": "Lenovo Y1", 
+        "model": model, 
 }
-
 
 def parseTrigger(triggerfile):
     triggers = triggerfile.split()
@@ -91,11 +96,8 @@ class led(object):
         elif command == 'off':
             self.turn_off()
 
-
 leds = eval(str(os.listdir("/sys/class/leds")))
 leds = {x:led(x) for x in leds}    
-    
-    
     
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
