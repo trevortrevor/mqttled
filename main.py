@@ -1,4 +1,5 @@
 from asyncio import open_connection
+from email.mime import base
 import os
 import json
 import paho.mqtt.client as mqtt
@@ -6,19 +7,18 @@ import re
 import netifaces as ni
 import encodings.idna
 import yaml
-with open("config.yaml", 'ro') as config:
+with open("config.yaml", 'r') as config:
     try:
         configuration = yaml.safe_load(config)
     except yaml.YAMLError as exc:
         print(exc)
 bind_if = configuration['interface']
-discovery_topic = configuration['dicovery_topic']
+discovery_topic = configuration['discovery_topic'] + "/"
 base_topic = configuration['base_topic']
 model = configuration['model']    
 interface_ip = ni.ifaddresses(bind_if)[ni.AF_INET][0]['addr']
 
 hostidentifier = os.uname()
-ha_discovery = base_topic + "_" + hostidentifier.nodename + "/"
 sub_topic = hostidentifier.nodename
 topic = base_topic + "/" + sub_topic + "/"
 
@@ -47,10 +47,10 @@ class led(object):
         with open(self.path + "trigger") as f:
             self.current_trigger, self.triggers = parseTrigger(f.read().rstrip())
         if self.current_trigger == 'none':
-            self.state = 'off'
+            self.state = 'OFF'
         else:
-            self.state = 'on'
-        self.topic = topic + re.sub('[^A-Za-z0-9]+', '', id)
+            self.state = 'ON'
+        self.topic = topic + re.sub('[^A-Za-z0-9]+', '-', id)
         self.commandTopic = self.topic + "/set"
         self.stateTopic = self.topic + "/state"
         self.discoveryPayload = json.dumps({
@@ -59,24 +59,26 @@ class led(object):
             "unique_id"             : hostidentifier.nodename + "_" + self.id,
             "brightness"            : True,
             "brightness_scale"      : 254,
-            "color_mode"            : False,
             "command_topic"         : self.commandTopic,
             "effect_list"           : self.triggers,
             "effect"                : True,
             "name"                  : hostidentifier.nodename + " " + self.id,
             "schema"                : "json",
-            "device"                : device
+            "device"                : device,
+            "json_attributes_topic" : self.stateTopic
         })
         
     def turn_on(self, on_mode="default-on"):
         os.system('echo ' + on_mode + ' > ' + self.path + "trigger")
+        self.state = 'ON'
     
     def turn_off(self):
         os.system('echo "none" > ' + self.path + "trigger")
+        self.state = 'OFF'
         
     def adjust_brightness(self, val=255):
         os.system('echo ' + str(val) + ' > ' + self.path + "brightness")
-        
+        self.brightness = val
     def json_state(self):
         return json.dumps(self.__dict__)
     
@@ -91,10 +93,14 @@ class led(object):
         except KeyError:
             print("no onmode sepecified")
             on_mode = 'default-on'
-        if command == 'on':
+        if command == 'ON':
             self.turn_on(on_mode)
-        elif command == 'off':
+        elif command == 'OFF':
             self.turn_off()
+        self.publish_update()
+            
+    def publish_update(self):
+        client.publish(self.stateTopic,self.json_state())
 
 leds = eval(str(os.listdir("/sys/class/leds")))
 leds = {x:led(x) for x in leds}    
@@ -105,6 +111,7 @@ def on_connect(client, userdata, flags, rc):
     else:
         print("Failed to connect with rc:" + rc)
     client.subscribe(base_topic + "/#")
+    client.publish(base_topic + "/" + hostidentifier.nodename + "/connection", json.dumps({"state": "on"}))
 
 def unhandled_message(client, userdata, msg):
     print("Unknown message")
@@ -122,7 +129,7 @@ for light in leds.values():
     client.message_callback_add(light.commandTopic, light.on_message)
 client.loop_start()   
 for light in leds.values():
-    client.publish(discovery_topic + ha_discovery + light.id + "/light/config", light.discoveryPayload)
-    client.publish(light.stateTopic,light.json_state())
+    client.publish(discovery_topic + "light/" + hostidentifier.nodename + "_" + light.id + "/light/config", light.discoveryPayload)
+    light.publish_update()
 while True:
     pass
