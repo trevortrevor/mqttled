@@ -1,4 +1,0 @@
-interface: 'br-lan'
-discovery_topic: homeassistant
-base_topic: openWRTLED
-model: "Lenovo Y1"
