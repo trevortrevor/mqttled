@@ -1,0 +1,7 @@
+paho-mqtt>=1.0
+pyyaml>=6.0
+asyncio>=3.4.3
+netifaces>=0.10.0
+pyuci>=0.9.0
+schema>=0.7.5
+jsonpath-ng>=1.5.3

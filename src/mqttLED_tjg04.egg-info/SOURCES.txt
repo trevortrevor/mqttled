@@ -1,0 +1,9 @@
+LICENCE
+README.md
+setup.py
+src/mqttLED_tjg04.egg-info/PKG-INFO
+src/mqttLED_tjg04.egg-info/SOURCES.txt
+src/mqttLED_tjg04.egg-info/dependency_links.txt
+src/mqttLED_tjg04.egg-info/not-zip-safe
+src/mqttLED_tjg04.egg-info/requires.txt
+src/mqttLED_tjg04.egg-info/top_level.txt
