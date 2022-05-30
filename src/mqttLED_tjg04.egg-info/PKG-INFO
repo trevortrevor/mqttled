@@ -9,7 +9,7 @@ License: MIT
 Keywords: OpenWRT, mqtt, Home Assistant
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
-Classifier: Operating System :: LEDE
+Classifier: Operating System :: POSIX :: BSD
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
 License-File: LICENCE

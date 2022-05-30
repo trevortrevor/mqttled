@@ -24,7 +24,7 @@ setup(
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
-        "Operating System :: LEDE",
+        "Operating System :: POSIX :: BSD",
     ],
     packages=find_packages(where='src'),
     package_dir={"": "src"},
