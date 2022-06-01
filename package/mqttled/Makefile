@@ -5,7 +5,8 @@ PKG_NAME:=mqttled
 PKG_VERSION:=0.1
 PKG_RELEASE:=1
 
-PYPI_NAME=mqttled
+PYPI_NAME:=mqttled
+PKG_HASH:=eb59d1817861191558d36442e6c7eaa07a0340064bfb483adde0ca9913acaeaf
 
 PKG_MAINTAINER:=Tom Grime <tom.grime@gmail.com>
 PKG_LICENSE:=MIT
