@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
-Name: mqttLED-tjg04
-Version: 0.0.14
+Name: mqttled
+Version: 0.0.2
 Summary: MQTT control of OpenWRT LEDs with optional Home Assistant Discovery
 Home-page: https://github.com/trevortrevor/mqttled
 Author: Tom Grime

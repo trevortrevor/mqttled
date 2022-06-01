@@ -1,3 +1,2 @@
-/blue-internet
-
-ucitest.py
+/dist/*
+*.pyc

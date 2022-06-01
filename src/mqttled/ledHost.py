@@ -9,9 +9,9 @@ import encodings.idna
 import logging
 from uci import Uci
 import sys
+import signal
 
-
-class mqttled(object):
+class ledHost(object):
     def __init__(self, config):
         self._config = config
         self._triggersconfig = self._config['triggers']
@@ -20,8 +20,16 @@ class mqttled(object):
         u = Uci()
         
         self._mqtt = mqtt.Client()
-        self._bind_if = u.get("network",self._config['mqtt']['interface'],"device")
-        self._interface_ip = ni.ifaddresses(self._bind_if)[ni.AF_INET][0]['addr']
+        self.running = False
+        signal.signal(signal.SIGINT, self._mqtt.disconnect)
+        signal.signal(signal.SIGTERM, self._mqtt.disconnect)
+        try:
+            self._bind_if = u.get("network",self._config['mqtt']['interface'],"device")
+            self._interface_ip = ni.ifaddresses(self._bind_if)[ni.AF_INET][0]['addr']
+        except:
+            logging.warn('Interface not found in config, binding to all')
+            self._interface_ip = None
+        
         
         if self._config['mqtt'].get('username', None):
             self._mqtt.username_pw_set(self._config['mqtt']['username'],
@@ -32,22 +40,26 @@ class mqttled(object):
                                self._config['mqtt'].get('certfile', None),
                                self._config['mqtt'].get('keyfile', None))
             
-        self._topic = self._config['basetopic'] + "/" + self._config['subtopic'] + "/"
-        self._discoveryTopic = self._config['discovery'] + "/"
+        self._topic = self._config['mqtt']['basetopic'] + "/" + self._config['mqtt']['subtopic'] + "/"
+        self._discoveryTopic = self._config['mqtt']['discovery'] + "/"
         
         self._mqtt.will_set(self._topic + "connection", 'offline', retain=True)
         self._mqtt.on_connect = self._on_mqtt_connect
         self._mqtt.on_disconnect = self._on_mqtt_connect
         self._mqtt.on_message = self._on_message
-        self._mqtt.message_callback(self._unhandled_message)
+        #self._mqtt.message_callback(self._unhandled_message)
         
         logging.info('MQTT broker host: %s, port: %d, use tls: %s',
                      config['mqtt']['host'],
-                     config['mqtt']['port'],
+                     int(config['mqtt']['port']),
                      bool(config['mqtt'].get('cafile', None)))
         
         if self._config['leds']['includeall'] == '1' or self._config['leds']['includeall'] == True:
-            self.leds = eval(str(os.listdir("/sys/class/leds")))
+            try:
+                self.leds = eval(str(os.listdir("/sys/class/leds")))
+            except FileNotFoundError as e:
+                logging.warn('No LEDS found in /sys/class/leds')
+                sys.exit()
         else:
             self.leds = self._config['leds']['include']
     
@@ -87,11 +99,17 @@ class mqttled(object):
 
     def run(self):
         self._mqtt.connect_async(self._config['mqtt']['host'], self._config['mqtt']['port'], bind_address=self._interface_ip)
-        self._mqtt.loop_start()
+        self.running = True
+        logging.info('MQTT LED Control Started')
+        self._mqtt.loop_forever()
     def stop(self):
         self._mqtt.disconnect()
         self._mqtt.loop_stop()
-        
+        logging.info('MQTT LED Control Stopped')
+    
+    def kill(self):
+        self.stop()
+        self.running = False
     def publishDiscovery(self):
         self._device = {
             "identifiers": ["openWrtLED" + "-" + self._model],
