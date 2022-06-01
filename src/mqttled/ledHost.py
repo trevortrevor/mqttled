@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from asyncio import open_connection
 from email.mime import base
 import os

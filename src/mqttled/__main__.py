@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from .config import load_uci, load_yaml
 import os
 import argparse
