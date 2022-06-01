@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from asyncio import open_connection
-from email.mime import base
 import os
 import json
 import paho.mqtt.client as mqtt
@@ -56,15 +55,25 @@ class ledHost(object):
                      int(config['mqtt']['port']),
                      bool(config['mqtt'].get('cafile', None)))
         
+        self._device = {
+            "identifiers": ["openWrtLED" + "-" + self._model],
+            "name": os.uname().nodename,
+            "manufacturer": "OpenWRT",
+            "model": self._model, 
+        }
+        
         if self._config['leds']['includeall'] == '1' or self._config['leds']['includeall'] == True:
+            logging.debug('LEDS include all set')
             try:
                 self.leds = eval(str(os.listdir("/sys/class/leds")))
             except FileNotFoundError as e:
                 logging.warn('No LEDS found in /sys/class/leds')
                 sys.exit()
         else:
+            logging.debug('Include all not set, adding ' + str(self._config['leds']['include']))
             self.leds = self._config['leds']['include']
-    
+            
+
 
         self.leds = {x:_led(x, self) for x in self.leds}    
         for entry in self._config['leds']['exclude']:
@@ -72,6 +81,8 @@ class ledHost(object):
         
         for light in self.leds.values():
             self._mqtt.message_callback_add(light.commandTopic, light.on_message)
+            
+
         
     def _on_mqtt_connect(self, client, userdata, flags, rc):
         logging.info('Connected to MQTT broker with code %s', rc)
@@ -100,7 +111,7 @@ class ledHost(object):
         logging.info('Unhandled message: %s %s', message.topic, message.payload)
 
     def run(self):
-        self._mqtt.connect_async(self._config['mqtt']['host'], self._config['mqtt']['port'], bind_address=self._interface_ip)
+        self._mqtt.connect_async(self._config['mqtt']['host'], int(self._config['mqtt']['port']), bind_address=self._interface_ip)
         self.running = True
         logging.info('MQTT LED Control Started')
         self._mqtt.loop_forever()
@@ -113,12 +124,7 @@ class ledHost(object):
         self.stop()
         self.running = False
     def publishDiscovery(self):
-        self._device = {
-            "identifiers": ["openWrtLED" + "-" + self._model],
-            "name": os.uname().nodename,
-            "manufacturer": "OpenWRT",
-            "model": self._model, 
-        }
+
         for light in self.leds.values():
             self._mqtt.publish(self._discoveryTopic + "light/" + self._device['name'] + "/" + light.id + "/config", light.discoveryPayload)
             light.publish_update()
@@ -127,9 +133,9 @@ class ledHost(object):
 
 
 class _led:
-    def __init__(self, controller):
-        self.client = controller.mqtt
-        self.trigger = controller.triggersconfig
+    def __init__(self, id, controller):
+        self.client = controller._mqtt
+        self.trigger = controller._triggersconfig
         self.id = re.sub('[^A-Za-z0-9]+', '', id)
         self.path = "/sys/class/leds/" + id +"/"
         with open(self.path + "brightness") as f:
@@ -171,7 +177,7 @@ class _led:
         self.brightness = val
     def json_state(self):
         return json.dumps(self.__dict__)
-    
+#TODO Fix this DUMP    
     def on_message(self, client, userdata, msg):
         msg = json.loads(msg.payload)
         try:
@@ -194,7 +200,7 @@ class _led:
     def publish_update(self):
         self.client.publish(self.stateTopic,self.json_state())
 
-    def parseTrigger(triggerfile, triggersconfig):
+    def parseTrigger(self, triggerfile, triggersconfig):
         triggers = triggerfile.split()
         retTriggers = []
         for i, trigger in enumerate(triggers):

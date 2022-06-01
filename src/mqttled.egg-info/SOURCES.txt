@@ -8,6 +8,7 @@ src/mqttled/ledHost.py
 src/mqttled.egg-info/PKG-INFO
 src/mqttled.egg-info/SOURCES.txt
 src/mqttled.egg-info/dependency_links.txt
+src/mqttled.egg-info/entry_points.txt
 src/mqttled.egg-info/not-zip-safe
 src/mqttled.egg-info/requires.txt
 src/mqttled.egg-info/top_level.txt

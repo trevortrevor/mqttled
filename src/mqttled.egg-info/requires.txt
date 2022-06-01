@@ -3,3 +3,4 @@ pyyaml>=6.0
 schema>=0.7.2
 netifaces>=0.10.0
 jsonpath-ng>=1.5.2
+pyuci

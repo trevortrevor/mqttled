@@ -2,7 +2,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=mqttled
-PKG_VERSION:=0.1
+PKG_VERSION:=0.0.4
 PKG_RELEASE:=1
 
 PYPI_NAME:=mqttled
@@ -12,7 +12,7 @@ PKG_MAINTAINER:=Tom Grime <tom.grime@gmail.com>
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE
 
-include ../pypi.mk
+include ../../lang/python/pypi.mk
 include $(INCLUDE_DIR)/package.mk
 include ../../lang/python/python3-package.mk
 
@@ -28,7 +28,10 @@ define Package/mqttled
 	+python3-jsonpath-ng \
 	+python3-yaml \
 	+python3-schema \
-	+python3-netifaces
+	+python3-netifaces \
+	+python3-logging \
+	+python3-urllib \
+	+python3-asyncio
 
 endef
 
@@ -42,6 +45,7 @@ define Py3Package/mqttled/install
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/mqttled.init $(1)/etc/init.d/mqttled
+	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_DATA) ./files/mqttled $(1)/etc/config/mqttled
 endef
 

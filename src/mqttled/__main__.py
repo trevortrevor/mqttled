@@ -26,12 +26,12 @@ def setup():
     
     return ledHost(config)
     
-def run(ledServer):
+def run():
+    ledServer = setup()
     ledServer.run()
     logging.info('MQTT LED Control Started')
     
    
 if __name__ == '__main__':
-    ledServer = setup()
-    run(ledServer)
+    run()
     
