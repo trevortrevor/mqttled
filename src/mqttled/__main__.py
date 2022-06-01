@@ -15,23 +15,18 @@ def setup():
     argp.add_argument('-y','--yaml', help='use a yaml config file e.g. /config/mqttled.yml', action='store_true')
     argp.add_argument('conffile', help='path to configuration file, defaults to /etc/config/mqttled', nargs='?', default='mqttled')
     argp.add_argument('-d','--debug', help="Debug", action='store_true')
-    args = argp.parse_args()
-    
-    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO, format=LOG_FORMAT)
-    
+    args = argp.parse_args()   
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO, format=LOG_FORMAT)    
     if args.yaml:
         config = load_yaml(args.yaml)
     else:
-        config = load_uci(args.conffile)
-    
+        config = load_uci(args.conffile)    
     return ledHost(config)
     
 def run():
     ledServer = setup()
     ledServer.run()
-    logging.info('MQTT LED Control Started')
-    
-   
+      
 if __name__ == '__main__':
     run()
     

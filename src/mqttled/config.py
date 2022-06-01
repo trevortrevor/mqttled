@@ -14,16 +14,13 @@ def json_path(txt):
     except Exception as e:
         raise SchemaError('Bad JsonPath format: %s' % txt)
 
-
 def str_or_jsonPath(txt):
     if "$." in txt:
         return json_path(txt)
     return txt
 
-
 def port_range(port):
     return 0 <= port <= 65535
-
 
 schema = Schema({
     'mqtt': {
@@ -51,7 +48,6 @@ schema = Schema({
         'target': And(str, len)
     },
 })
-
 
 def load_yaml(config_filename):
     with open(config_filename, 'r') as f:
