@@ -20,8 +20,7 @@ class ledHost(object):
         u = Uci()    
         self._mqtt = mqtt.Client()
         self.running = False
-        signal.signal(signal.SIGINT, self.stop())
-        signal.signal(signal.SIGTERM, self.stop())
+
         try:
             self._bind_if = u.get("network",self._config['mqtt']['interface'],"device")
             self._interface_ip = ni.ifaddresses(self._bind_if)[ni.AF_INET][0]['addr']
@@ -67,6 +66,9 @@ class ledHost(object):
             del self.leds[entry]      
         for light in self.leds.values():
             self._mqtt.message_callback_add(light.commandTopic, light.on_message)
+        
+        signal.signal(signal.SIGINT, self.stop)
+        signal.signal(signal.SIGTERM, self.stop)
                   
     def _on_mqtt_connect(self, client, userdata, flags, rc):
         logging.info('Connected to MQTT broker with code %s', rc)
@@ -98,16 +100,20 @@ class ledHost(object):
         logging.info('MQTT LED Control Started')
         self._mqtt.loop_forever()
         
-    def stop(self):
+    def stop(self, sig=None, stack=None):
         self.running = False
         self._mqtt.publish(self._topic + "connection", "offline", retain=True)
         self._mqtt.disconnect()
         self._mqtt.loop_stop()
+        try:
+            logging.info('mqttled stopped by signal: ' + str(sig) + " " + stack )
+        except:
+            pass
         logging.info('MQTT LED Control Stopped')
         
     def publishDiscovery(self):
         for light in self.leds.values():
-            self._mqtt.publish(self._discoveryTopic + "light/" + self._device['name'] + "/" + light.id + "/config", light.discoveryPayload)
+            self._mqtt.publish(self._discoveryTopic + "light/" + self._device['name'] + "/" + light.id + "/config", light.discoveryPayload, retain=True)
             light.publish_update()
 
 class _led:
@@ -187,7 +193,7 @@ class _led:
         self.publish_update()
             
     def publish_update(self):
-        self.client.publish(self.stateTopic,self.json_state())
+        self.client.publish(self.stateTopic,self.json_state(), retain=True)
 
     def parseTrigger(self, triggerFile, triggersConfig):
         triggers = triggerFile.split()
