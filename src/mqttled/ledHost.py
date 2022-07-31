@@ -77,7 +77,7 @@ class ledHost(object):
                mqtt.CONNACK_REFUSED_IDENTIFIER_REJECTED: 'invalid client identifier',
                mqtt.CONNACK_REFUSED_SERVER_UNAVAILABLE: 'server unavailable',
                mqtt.CONNACK_REFUSED_BAD_USERNAME_PASSWORD: 'bad username or password',
-               mqtt.CONNACK_REFUSED_NOT_AUTHORIZED: 'not authorised'}
+               mqtt.CONNACK_REFUSED_NOT_AUTHORIZED: 'not authorized'}
         if rc != mqtt.CONNACK_ACCEPTED:
             logging.error('Connection refused from reason: %s', lut.get(rc, 'unknown code'))
         if rc == mqtt.CONNACK_ACCEPTED:
