@@ -6,7 +6,7 @@ import logging
 import yaml
 from schema import Schema, And, Or, Use, Optional, SchemaError
 import jsonpath_ng
-from uci import Uci
+from uci import Uci, UciExceptionNotFound
 
 def json_path(txt):
     try:

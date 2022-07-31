@@ -152,15 +152,18 @@ class _led:
         })
         
     def turn_on(self, on_mode="default-on"):
-        os.system('echo ' + on_mode + ' > ' + self.path + "trigger")
+        with open(self.path + "trigger", "w") as f:
+            f.write(on_mode)
         self.state = 'ON'
     
     def turn_off(self):
-        os.system('echo "none" > ' + self.path + "trigger")
+        with open(self.path + "trigger", "w") as f:
+            f.write("none")
         self.state = 'OFF'
         
     def adjust_brightness(self, val=255):
-        os.system('echo ' + str(val) + ' > ' + self.path + "brightness")
+        with open(self.path + "brightness", "w") as f:
+            f.write(str(val))
         self.brightness = val
         
     def json_state(self):
@@ -172,16 +175,22 @@ class _led:
             }
         )    
     def on_message(self, client, userdata, msg):
-        msg = json.loads(msg.payload)
-        try:
-            command = msg['state']
-        except:
+        payload = json.loads(msg.payload)
+        logging.debug(f"{self.path}: {payload}")
+        
+        if "state" in payload.keys():
+            command = payload['state']
+        else:
             logging.error("Unknown command message")    
-        try:
-            on_mode = msg['effect']
-        except KeyError:
-            logging.debug("no on_mode sepecified")
+            return
+        
+        if "effect" in payload.keys(): 
+            on_mode = payload['effect']
+        else:
+            logging.debug("no on_mode specified")    
             on_mode = 'default-on'
+            
+
         if on_mode == "none":
             self.turn_off()
         elif command == 'ON':
@@ -189,7 +198,13 @@ class _led:
         elif command == 'OFF':
             self.turn_off()
         else:
-            logging.warn('Unknown state: ' + command)
+            logging.warn(f'Unknown state: {command}')
+
+        if "brightness" in payload.keys():
+            self.adjust_brightness(payload['brightness'])
+        else:
+            self.adjust_brightness(self.brightness)
+
         self.publish_update()
             
     def publish_update(self):
@@ -198,6 +213,7 @@ class _led:
     def parseTrigger(self, triggerFile, triggersConfig):
         triggers = triggerFile.split()
         retTriggers = []
+        currentTrigger = ""
         for trigger in triggers:
             if trigger[0] == "[":
                 currentTrigger = trigger.strip('[]')
