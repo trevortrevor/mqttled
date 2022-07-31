@@ -4,17 +4,21 @@
 This package allows control of an OpenWRT device's LEDs over MQTT. Configured using UCI or YAML. No changes are made to the existing triggers. Uninstalling will revert to your normal LED triggers.
 
 ## Config
+
 Normal configuration is done through UCI. The configuration file is:
+
 ```
 /etc/config/mqttled
 ```
+
 The default configuration looks like this:
+
 ```
 config mqtt 'mqtt'
     #MQTT Broker Address
     option host '192.168.1.1'
     option port '1883'
-    #May work without this, should bind to all interfaces. Needs to be an interface matching in /etc/config/netowkr
+    #May work without this, should bind to all interfaces. Needs to be an interface matching in /etc/config/network
     option interface 'lan'
     option username ''
     option password ''
@@ -45,23 +49,31 @@ config trigger 'triggers'
     list triggers 'heartbeat'
     list triggers 'timer'
 ```
+
 Changes should be made either with UCI e.g.
+
 ```
 uci set mqttled.mqtt.host='192.168.1.254'
 uci commit
 ```
+
 or by editing the config file directly.
 You will then need to restart the service with
+
 ```
 service mqttled restart
 ```
 
 ## Info
-### Topics
-This service will publish a retained message to the `discoverytopic/light` on start. This will point Homeassistant to the state and availability topics of your device set under `basetopic/subtopic`. The current state is reported on `basetopic/subtopic/ledname/state`. The daemon is subscribed to `basetopic/subtopic/ledname/set` for commands. 
 
-### Attirbutes
-The mqttled service will expose the LEDs as dimmable using the value set under `/sys/class/leds/led#/brightness`. This doesn't seem to work on any of the devices I've tested, but perhaps some devices have working PWM on the LEDs
+### Topics
+
+This service will publish a retained message to the `discoverytopic/light` on start. This will point Homeassistant to the state and availability topics of your device set under `basetopic/subtopic`. The current state is reported on `basetopic/subtopic/ledname/state`. The daemon is subscribed to `basetopic/subtopic/ledname/set` for commands.
+
+### Attributes
+
+The mqttled service will expose the LEDs as dimmable using the value set under `/sys/class/leds/led#/brightness`.
 
 ### Local Changes
-Changes made to LED state on the device are __not__ polled. *i.e.* any changes you make to the LED states by any other means will not be reflected unless the service is restarted. 
+
+Changes made to LED state on the device are __not__ polled. *i.e.* any changes you make to the LED states by any other means will not be reflected unless the service is restarted.
