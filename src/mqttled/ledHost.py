@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 
-import encodings.idna
 import logging
 import os
 import signal
@@ -12,6 +11,7 @@ import paho.mqtt.client as mqtt
 from uci import Uci
 
 from mqttled.led import Led
+from mqttled.ledrgb import LedRGB
 
 class LedHost(object):
     def __init__(self, config):
@@ -28,7 +28,7 @@ class LedHost(object):
             self.bind_if = u.get("network",self.config['mqtt']['interface'],"device")
             self.interface_ip = ni.ifaddresses(self.bind_if)[ni.AF_INET][0]['addr']
         except:
-            logging.warn('Interface not found in config, binding to all')
+            logging.warning('Interface not found in config, binding to all')
             self.interface_ip = None
         
         if self.config['mqtt'].get('username', None):
@@ -61,23 +61,31 @@ class LedHost(object):
             "manufacturer": "OpenWRT",
             "model": self.model, 
         } 
-        if self.config['leds']['includeall'] == '1' or self.config['leds']['includeall'] == True:
+        if self.config['leds']['includeall'] == '1' or self.config['leds']['includeall'] is True:
             logging.debug('LEDS include all set')
             try:
-                self.leds = os.listdir("/sys/class/leds")
+                self.ledNames = os.listdir("/sys/class/leds")
             except FileNotFoundError:
-                logging.warn('No LEDS found in /sys/class/leds')
+                logging.warning('No LEDS found in /sys/class/leds')
                 exit(1)
         
         else:
             logging.debug('Include all not set, adding ' + str(self.config['leds']['include']))
-            self.leds = self.config['leds']['include']
+            self.ledNames = self.config['leds'].get('include', [])
         
         for entry in self.config['leds']['exclude']:
-            self.leds.remove(entry)  
+            self.ledNames.remove(entry)  
 
-        self.leds = {x:Led(x, self) for x in self.leds}    
-        
+        self.leds = {x:Led(x, self) for x in self.ledNames}    
+        logging.info(self.config["rgb"]["enablergb"])
+        if self.config["rgb"].get("enablergb", '0') == '1' or self.config["rgb"].get("enablergb", False) is True:
+            logging.info('RGB enabled')
+            rgbLedNames = self.config["rgb"].keys()
+            if "red" in rgbLedNames and "green" in rgbLedNames and "blue" in rgbLedNames:
+                self.leds["rgb"] = LedRGB(self.config["rgb"]["name"], self.config["rgb"]["red"], self.config["rgb"]["green"], self.config["rgb"]["blue"], self)
+            else:
+                logging.warning("RGB LEDs not configured correctly, please check config")
+
         for light in self.leds.values():
             self.mqtt.message_callback_add(light.commandTopic, light.on_message)
         

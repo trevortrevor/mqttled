@@ -4,33 +4,16 @@ import re
 from os.path import join
 from paho.mqtt.client import Client, MQTTMessage
 
-def parse_trigger(triggerFile, triggersConfig):
-    triggers = triggerFile.split()
-    retTriggers = []
-    currentTrigger = ""
-    for trigger in triggers:
-        if trigger[0] == "[":
-            currentTrigger = trigger.strip('[]')
-            retTriggers.append(currentTrigger)
-        if trigger in triggersConfig:
-            retTriggers.append(trigger)
-    return currentTrigger, retTriggers
+from mqttled.ledDriver import LedDriver
+
 
 class Led:
-    def __init__(self, id, controller):
+    def __init__(self, led_id, controller):
         self.client = controller.mqtt
-        self.triggers = controller.triggers_config
-        self.id = re.sub('[^A-Za-z0-9]+', '-', id)
-        self.path = join("/sys/class/leds/", id)
-
-        with open(join(self.path, "brightness")) as f:
-            self.brightness = int(f.read().rstrip())
-        with open(join(self.path, "trigger")) as f:
-            self.current_trigger, self.triggers = parse_trigger(f.read().rstrip(), self.triggers)
+        self.id = re.sub('[^A-Za-z0-9]+', '-', led_id)
+        self.led = LedDriver(led_id, controller.triggers_config)
         
-        self.state = "OFF" if self.current_trigger == 'none' else "ON"
-        
-        self.topic        = join(controller.topic, id)
+        self.topic        = join(controller.topic, led_id)
         self.commandTopic = join(self.topic, "set")
         self.stateTopic   = join(self.topic, "state")
 
@@ -44,37 +27,20 @@ class Led:
             "brightness"            : True,
             "brightness_scale"      : 254,
             "command_topic"         : self.commandTopic,
-            "effect_list"           : self.triggers,
+            "effect_list"           : self.led.triggers,
             "effect"                : True,
             "name"                  : self.id,
             "schema"                : "json",
             "device"                : controller.device,
             "json_attributes_topic" : self.stateTopic
         })
-        
-    def turn_on(self, on_mode="default-on"):
-        with open(join(self.path, "trigger"), "w") as f:
-            f.write(on_mode)
-        self.state = 'ON'
-    
-    def turn_off(self):
-        with open(join(self.path, "trigger"), "w") as f:
-            f.write("none")
-        self.state = 'OFF'
-        self.adjust_brightness(0, store=False)
-        
-    def adjust_brightness(self, val:int, store=True):
-        with open(join(self.path, "brightness"), "w") as f:
-            f.write(str(val))
-        if store:
-            self.brightness = val
-        
+            
     def json_state(self):
         return json.dumps(
             {
-                "state": self.state,
-                "brightness": self.brightness,
-                "trigger": self.current_trigger 
+                "state": self.led.state,
+                "brightness": self.led.brightness,
+                "trigger": self.led.current_trigger 
             }
         )   
 
@@ -89,15 +55,15 @@ class Led:
             return
         
         effect    = payload.get("effect", "default-on")
-        brightness = payload.get('brightness', self.brightness)
+        brightness = payload.get('brightness', self.led.brightness)
 
         if state == "OFF" or effect == "none":
-            self.turn_off()
+            self.led.turn_off()
         elif state == 'ON':
-            self.turn_on(effect)
-            self.adjust_brightness(brightness)
+            self.led.turn_on(effect)
+            self.led.set_brightness(brightness)
         else:
-            logging.warn(f'Unknown state: {state}')
+            logging.warning(f'Unknown state: {state}')
         
 
         self.publish_update()

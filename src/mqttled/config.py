@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
 import os
-import sys
-import logging
 import yaml
-from schema import Schema, And, Or, Use, Optional, SchemaError
+from schema import Schema, And, Use, Optional, SchemaError
 import jsonpath_ng
 from uci import Uci, UciExceptionNotFound
 
@@ -12,7 +10,7 @@ def json_path(txt):
     try:
         return jsonpath_ng.parse(txt)
     except Exception as e:
-        raise SchemaError('Bad JsonPath format: %s' % txt)
+        raise SchemaError(f'Bad JsonPath format: {txt}') from e
 
 def str_or_jsonPath(txt):
     if "$." in txt:
@@ -58,7 +56,7 @@ def load_yaml(config_filename):
             # Better error format
             error = str(e).splitlines()
             del error[1]
-            raise Exception(' '.join(error))
+            raise Exception(' '.join(error)) from e
         
 def load_uci(configpath='mqttled'):
     u = Uci()
@@ -66,6 +64,6 @@ def load_uci(configpath='mqttled'):
         config = u.get(configpath)
     except UciExceptionNotFound as e:
         error = str(e).splitlines()
-        raise Exception(' '.join(error))
+        raise Exception(' '.join(error)) from e 
     return config
     
