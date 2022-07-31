@@ -5,7 +5,7 @@ import os
 import argparse
 import sys
 import logging
-from .ledHost import ledHost
+from .ledHost import LedHost
 import signal
 
 LOG_FORMAT = '%(asctime)s %(levelname)s: %(message)s'
@@ -21,7 +21,7 @@ def setup():
         config = load_yaml(args.yaml)
     else:
         config = load_uci(args.conffile)    
-    return ledHost(config)
+    return LedHost(config)
     
 def run():
     ledServer = setup()
