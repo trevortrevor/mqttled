@@ -77,9 +77,9 @@ class LedHost(object):
             self.ledNames.remove(entry)  
 
         self.leds = {x:Led(x, self) for x in self.ledNames}    
-        logging.info(self.config["rgb"]["enablergb"])
+
+        logging.debug("RGB LED Enabled: %s", self.config["rgb"].get("enablergb", "0"))
         if self.config["rgb"].get("enablergb", '0') == '1' or self.config["rgb"].get("enablergb", False) is True:
-            logging.info('RGB enabled')
             rgbLedNames = self.config["rgb"].keys()
             if "red" in rgbLedNames and "green" in rgbLedNames and "blue" in rgbLedNames:
                 self.leds["rgb"] = LedRGB(self.config["rgb"]["name"], self.config["rgb"]["red"], self.config["rgb"]["green"], self.config["rgb"]["blue"], self)
