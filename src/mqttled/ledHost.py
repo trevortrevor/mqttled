@@ -1,110 +1,135 @@
 #!/usr/bin/env python3
 
-from asyncio import open_connection
-import os
-import json
-import paho.mqtt.client as mqtt
-import re
-import netifaces as ni
-import encodings.idna
-import logging
-from uci import Uci
-import sys
-import signal
 
-class ledHost(object):
+import logging
+import os
+import signal
+from os.path import join
+
+import netifaces as ni
+import paho.mqtt.client as mqtt
+from uci import Uci
+
+from mqttled.led import Led
+from mqttled.ledrgb import LedRGB
+
+class LedHost(object):
     def __init__(self, config):
-        self._config = config
-        self._triggersconfig = self._config['triggers']['triggers']
-        self._model = self._config['mqtt'].get('model', os.uname().nodename)
+        self.config = config
+        self.triggers_config = self.config['triggers']['triggers']
+        self.model = self.config['mqtt'].get('model', os.uname().nodename)
+
         u = Uci()    
-        self._mqtt = mqtt.Client()
+        self.mqtt = mqtt.Client()
+
         self.running = False
 
         try:
-            self._bind_if = u.get("network",self._config['mqtt']['interface'],"device")
-            self._interface_ip = ni.ifaddresses(self._bind_if)[ni.AF_INET][0]['addr']
+            self.bind_if = u.get("network",self.config['mqtt']['interface'],"device")
+            self.interface_ip = ni.ifaddresses(self.bind_if)[ni.AF_INET][0]['addr']
         except:
-            logging.warn('Interface not found in config, binding to all')
-            self._interface_ip = None       
-        if self._config['mqtt'].get('username', None):
-            self._mqtt.username_pw_set(self._config['mqtt']['username'],
-                                       self._config['mqtt'].get('password', None))         
-        if self._config['mqtt'].get('cafile', None):
-            self._mqtt.tls_set(self._config['mqtt']['cafile'],
-                               self._config['mqtt'].get('certfile', None),
-                               self._config['mqtt'].get('keyfile', None))            
-        self._topic = self._config['mqtt']['basetopic'] + "/" + self._config['mqtt']['subtopic'] + "/"
-        self._discoveryTopic = self._config['mqtt']['discovery'] + "/"  
-        self._mqtt.will_set(self._topic + "connection", 'offline', retain=True)
-        self._mqtt.on_connect = self._on_mqtt_connect
-        self._mqtt.on_disconnect = self._on_mqtt_connect
-        self._mqtt.on_message = self._on_message
+            logging.warning('Interface not found in config, binding to all')
+            self.interface_ip = None
+        
+        if self.config['mqtt'].get('username', None):
+            self.mqtt.username_pw_set(
+                self.config['mqtt']['username'],
+                self.config['mqtt'].get('password', None)
+            )         
+        
+        if self.config['mqtt'].get('cafile', None):
+            self.mqtt.tls_set(
+                self.config['mqtt']['cafile'],
+                self.config['mqtt'].get('certfile', None),
+                self.config['mqtt'].get('keyfile', None)
+            )            
+        
+        self.topic          = join(self.config['mqtt']['basetopic'], self.config['mqtt']['subtopic'])
+        self.discoveryTopic =      self.config['mqtt']['discovery']
+        self.mqtt.will_set(join(self.topic, "connection"), 'offline', retain=True)
+        self.mqtt.on_connect    = self.on_mqtt_connect
+        self.mqtt.on_disconnect = self.on_mqtt_disconnect
+        self.mqtt.on_message    = self.on_message
   
         logging.info('MQTT broker host: %s, port: %d, use tls: %s',
                      config['mqtt']['host'],
                      int(config['mqtt']['port']),
                      bool(config['mqtt'].get('cafile', None))) 
-        self._device = {
-            "identifiers": ["openWrtLED" + "-" + self._model],
+        self.device = {
+            "identifiers": ["openWrtLED" + "-" + self.model],
             "name": os.uname().nodename,
             "manufacturer": "OpenWRT",
-            "model": self._model, 
+            "model": self.model, 
         } 
-        if self._config['leds']['includeall'] == '1' or self._config['leds']['includeall'] == True:
+        if self.config['leds']['includeall'] == '1' or self.config['leds']['includeall'] is True:
             logging.debug('LEDS include all set')
             try:
-                self.leds = eval(str(os.listdir("/sys/class/leds")))
-            except FileNotFoundError as e:
-                logging.warn('No LEDS found in /sys/class/leds')
-                sys.exit()
+                self.ledNames = os.listdir("/sys/class/leds")
+            except FileNotFoundError:
+                logging.warning('No LEDS found in /sys/class/leds')
+                exit(1)
+        
         else:
-            logging.debug('Include all not set, adding ' + str(self._config['leds']['include']))
-            self.leds = self._config['leds']['include']
-        self.leds = {x:_led(x, self) for x in self.leds}    
-        for entry in self._config['leds']['exclude']:
-            del self.leds[entry]      
+            logging.debug('Include all not set, adding ' + str(self.config['leds']['include']))
+            self.ledNames = self.config['leds'].get('include', [])
+        
+        for entry in self.config['leds']['exclude']:
+            self.ledNames.remove(entry)  
+
+        self.leds = {x:Led(x, self) for x in self.ledNames}    
+
+        logging.debug("RGB LED Enabled: %s", self.config["rgb"].get("enablergb", "0"))
+        if self.config["rgb"].get("enablergb", '0') == '1' or self.config["rgb"].get("enablergb", False) is True:
+            rgbLedNames = self.config["rgb"].keys()
+            if "red" in rgbLedNames and "green" in rgbLedNames and "blue" in rgbLedNames:
+                self.leds["rgb"] = LedRGB(self.config["rgb"]["name"], self.config["rgb"]["red"], self.config["rgb"]["green"], self.config["rgb"]["blue"], self)
+            else:
+                logging.warning("RGB LEDs not configured correctly, please check config")
+
         for light in self.leds.values():
-            self._mqtt.message_callback_add(light.commandTopic, light.on_message)
+            self.mqtt.message_callback_add(light.commandTopic, light.on_message)
         
         signal.signal(signal.SIGINT, self.stop)
         signal.signal(signal.SIGTERM, self.stop)
                   
-    def _on_mqtt_connect(self, client, userdata, flags, rc):
+    def on_mqtt_connect(self, client, userdata, flags, rc):
         logging.info('Connected to MQTT broker with code %s', rc)
 
-        lut = {mqtt.CONNACK_REFUSED_PROTOCOL_VERSION: 'incorrect protocol version',
-               mqtt.CONNACK_REFUSED_IDENTIFIER_REJECTED: 'invalid client identifier',
-               mqtt.CONNACK_REFUSED_SERVER_UNAVAILABLE: 'server unavailable',
-               mqtt.CONNACK_REFUSED_BAD_USERNAME_PASSWORD: 'bad username or password',
-               mqtt.CONNACK_REFUSED_NOT_AUTHORIZED: 'not authorised'}
-        if rc != mqtt.CONNACK_ACCEPTED:
-            logging.error('Connection refused from reason: %s', lut.get(rc, 'unknown code'))
+        responses = {
+            mqtt.CONNACK_REFUSED_PROTOCOL_VERSION:      'incorrect protocol version',
+            mqtt.CONNACK_REFUSED_IDENTIFIER_REJECTED:   'invalid client identifier',
+            mqtt.CONNACK_REFUSED_SERVER_UNAVAILABLE:    'server unavailable',
+            mqtt.CONNACK_REFUSED_BAD_USERNAME_PASSWORD: 'bad username or password',
+            mqtt.CONNACK_REFUSED_NOT_AUTHORIZED:        'not authorized'
+        }
         if rc == mqtt.CONNACK_ACCEPTED:
-            logging.info('subscribed to  %s + #', self._topic)
-            client.subscribe(self._topic + "#")
-            client.publish(self._topic + "connection", "online", retain=True)
+            logging.info('subscribed to  %s + #', self.topic)
+            client.subscribe(join(self.topic, "#"))
+            client.publish(join(self.topic, "connection"), "online", retain=True)
             self.publishDiscovery()
-    def _on_mqtt_disconnect(self, client, userdata, rc):
+        else:
+            logging.error('Connection refused from reason: %s', responses.get(rc, 'unknown'))
+
+    def on_mqtt_disconnect(self, client, userdata, rc):
         logging.info('Disconnect from MQTT broker with code %s', rc)
-        
-    def _on_message(self, client, userdata, message):
+
+    def on_message(self, client, userdata, message):
         logging.debug('mqtt_on_message %s %s', message.topic, message.payload) 
-         
-    def _unhandled_message(self, client, userdata, message):
+
+    def unhandled_message(self, client, userdata, message):
         logging.info('Unhandled message: %s %s', message.topic, message.payload)
-        
+
     def run(self):
-        self._mqtt.connect_async(self._config['mqtt']['host'], int(self._config['mqtt']['port']), bind_address=self._interface_ip)
+        self.mqtt.connect_async(self.config['mqtt']['host'], int(self.config['mqtt']['port']), bind_address=self.interface_ip)
         self.running = True
         logging.info('MQTT LED Control Started')
-        self._mqtt.loop_forever()
+        self.mqtt.loop_forever()
         
     def stop(self, sig=None, stack=None):
         self.running = False
-        self._mqtt.publish(self._topic + "connection", "offline", retain=True)
-        self._mqtt.disconnect()
-        self._mqtt.loop_stop()
+        self.mqtt.publish(join(self.topic, "connection"), "offline", retain=True)
+        self.mqtt.disconnect()
+        self.mqtt.loop_stop()
         try:
             logging.info('mqttled stopped by signal: ' + str(sig) + " " + stack )
         except:
@@ -113,98 +138,8 @@ class ledHost(object):
         
     def publishDiscovery(self):
         for light in self.leds.values():
-            self._mqtt.publish(self._discoveryTopic + "light/" + self._device['name'] + "/" + light.id + "/config", light.discoveryPayload, retain=True)
+            self.mqtt.publish(join(self.discoveryTopic, "light", self.device['name'], light.id, "config"), light.discoveryPayload, retain=True)
             light.publish_update()
 
-class _led:
-    def __init__(self, id, controller):
-        self.client = controller._mqtt
-        self.triggers = controller._triggersconfig
-        self.id = re.sub('[^A-Za-z0-9]+', '-', id)
-        self.path = "/sys/class/leds/" + id +"/"
-
-        with open(self.path + "brightness") as f:
-            self.brightness = int(f.read().rstrip())
-        with open(self.path + "trigger") as f:
-            self.current_trigger, self.triggers = self.parseTrigger(f.read().rstrip(), self.triggers)
-        if self.current_trigger == 'none':
-            self.state = 'OFF'
-        else:
-            self.state = 'ON'
-        self.topic = controller._topic + id + "/"
-        self.commandTopic = self.topic + "set"
-        self.stateTopic = self.topic + "state"
-        self.client.message_callback_add(self.commandTopic, self.on_message)
-        logging.info(f"LED: {self.id} subscribed to {self.commandTopic}")
-        self.discoveryPayload = json.dumps({
-            "availability_topic"    : controller._topic + "connection",
-            "state_topic"           : self.stateTopic,
-            "unique_id"             : controller._model + "_" + self.id,
-            "brightness"            : True,
-            "brightness_scale"      : 254,
-            "command_topic"         : self.commandTopic,
-            "effect_list"           : self.triggers,
-            "effect"                : True,
-            "name"                  : self.id,
-            "schema"                : "json",
-            "device"                : controller._device,
-            "json_attributes_topic" : self.stateTopic
-        })
-        
-    def turn_on(self, on_mode="default-on"):
-        os.system('echo ' + on_mode + ' > ' + self.path + "trigger")
-        self.state = 'ON'
-    
-    def turn_off(self):
-        os.system('echo "none" > ' + self.path + "trigger")
-        self.state = 'OFF'
-        
-    def adjust_brightness(self, val=255):
-        os.system('echo ' + str(val) + ' > ' + self.path + "brightness")
-        self.brightness = val
-        
-    def json_state(self):
-        return json.dumps(
-            {
-                "state": self.state,
-                "brightness": self.brightness,
-                "trigger": self.current_trigger    
-            }
-        )    
-    def on_message(self, client, userdata, msg):
-        msg = json.loads(msg.payload)
-        try:
-            command = msg['state']
-        except:
-            logging.error("Unknown command message")    
-        try:
-            on_mode = msg['effect']
-        except KeyError:
-            logging.debug("no on_mode sepecified")
-            on_mode = 'default-on'
-        if on_mode == "none":
-            self.turn_off()
-        elif command == 'ON':
-            self.turn_on(on_mode)
-        elif command == 'OFF':
-            self.turn_off()
-        else:
-            logging.warn('Unknown state: ' + command)
-        self.publish_update()
-            
-    def publish_update(self):
-        self.client.publish(self.stateTopic,self.json_state(), retain=True)
-
-    def parseTrigger(self, triggerFile, triggersConfig):
-        triggers = triggerFile.split()
-        retTriggers = []
-        for trigger in triggers:
-            if trigger[0] == "[":
-                currentTrigger = trigger.strip('[]')
-                retTriggers.append(currentTrigger)
-            if trigger in triggersConfig:
-                retTriggers.append(trigger)
-        return currentTrigger, retTriggers
-       
 if __name__ == '__main__':
-    sys.exit()
+    exit()
