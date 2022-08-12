@@ -4,7 +4,10 @@ setup.py
 src/mqttled/__init__.py
 src/mqttled/__main__.py
 src/mqttled/config.py
+src/mqttled/led.py
+src/mqttled/ledDriver.py
 src/mqttled/ledHost.py
+src/mqttled/ledrgb.py
 src/mqttled.egg-info/PKG-INFO
 src/mqttled.egg-info/SOURCES.txt
 src/mqttled.egg-info/dependency_links.txt
