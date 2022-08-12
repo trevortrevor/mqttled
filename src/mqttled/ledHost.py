@@ -74,7 +74,10 @@ class LedHost(object):
             self.ledNames = self.config['leds'].get('include', [])
         
         for entry in self.config['leds']['exclude']:
-            self.ledNames.remove(entry)  
+            try:
+                self.ledNames.remove(entry) 
+            except ValueError:
+                logging.warning(f'{entry} not a valid led name') 
 
         self.leds = {x:Led(x, self) for x in self.ledNames}    
 
