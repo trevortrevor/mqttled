@@ -17,7 +17,7 @@ requirements = ['paho-mqtt>=1.0', 'pyyaml>=6.0','schema>=0.7.2','netifaces>=0.10
 
 setup(
     name='mqttled',
-    version='0.1.1',
+    version='0.1.2',
     description='MQTT control of OpenWRT LEDs with optional Home Assistant Discovery',
     author='Tom Grime',
     author_email='tom.grime@gmail.com',
